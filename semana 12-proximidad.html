@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vecinos más Cercanos con OpenStreetMap</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+        }
+        #controls {
+            margin: 20px 0;
+        }
+        #container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        #map {
+            width: 800px;
+            height: 600px;
+            border: 1px solid black;
+        }
+        #neighborsList {
+            margin-left: 20px;
+        }
+        h3 {
+            margin: 0 0 10px 0;
+        }
+        ul {
+            padding: 0;
+            list-style-type: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <label for="numPoints">Número de Puntos:</label>
+        <input type="number" id="numPoints" value="50" min="1" max="500">
+        <label for="numNeighbors">Número de Vecinos Más Cercanos:</label>
+        <input type="number" id="numNeighbors" value="5" min="1" max="50">
+        <button onclick="generatePoints()">Generar Puntos</button>
+    </div>
+    <div id="container">
+        <div id="map"></div>
+        <div id="neighborsList">
+            <h3>Vecinos más Cercanos</h3>
+            <ul id="neighborNames"></ul>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        const map = L.map('map').setView([-15.8402, -70.0219], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        let points = [];
+        const markers = L.layerGroup().addTo(map);
+
+        function generatePoints() {
+            const numPoints = +document.getElementById("numPoints").value;
+            points = d3.range(numPoints).map((d, i) => ({
+                lat: -15.8402 + (Math.random() - 0.5) * 0.1, 
+                lng: -70.0219 + (Math.random() - 0.5) * 0.1,
+                name: `Motorizado ${i + 1}`
+            }));
+            drawPoints();
+        }
+
+        function drawPoints() {
+            markers.clearLayers();
+            points.forEach(point => {
+                L.circleMarker([point.lat, point.lng], { radius: 5, color: 'blue' })
+                    .bindTooltip(point.name, { permanent: true, direction: 'top' })
+                    .addTo(markers);
+            });
+        }
+
+        function findNearestNeighbors(lat, lng, k) {
+            return points
+                .map(p => ({...p, distance: Math.hypot(p.lat - lat, p.lng - lng)}))
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, k);
+        }
+
+        function updateNeighborsList(neighbors) {
+            const list = d3.select("#neighborNames");
+            list.selectAll("li").remove();
+            neighbors.forEach(neighbor => {
+                const distanceInMeters = (neighbor.distance * 111320).toFixed(2);
+                list.append("li").text(`${neighbor.name} - ${distanceInMeters} metros`);
+            });
+        }
+
+        map.on("click", function(event) {
+            const { lat, lng } = event.latlng;
+            const numNeighbors = +document.getElementById("numNeighbors").value;
+            const neighbors = findNearestNeighbors(lat, lng, numNeighbors);
+
+            drawPoints();
+            L.circleMarker([lat, lng], { radius: 7, color: 'green' }).addTo(markers);
+
+            neighbors.forEach(neighbor => {
+                L.circleMarker([neighbor.lat, neighbor.lng], { radius: 5, color: 'red' })
+                    .bindTooltip(neighbor.name, { permanent: true, direction: 'top' })
+                    .addTo(markers);
+            });
+
+            const maxDistance = neighbors[numNeighbors - 1].distance * 111320; // Approx conversion to meters
+            L.circle([lat, lng], { radius: maxDistance, color: 'red', fillOpacity: 0 }).addTo(markers);
+
+            updateNeighborsList(neighbors);
+        });
+
+        // Generate initial points
+        generatePoints();
+    </script>
+</body>
+</html>
